@@ -1,0 +1,15 @@
+name: "aeroshield"
+acli_version: "0.3.0"
+agent_directory: "app"
+region: "us-central1"
+base_template: "adk"
+generated_at: "2026-06-06T18:51:36.198177+00:00"
+language: "python"
+create_params:
+  deployment_target: "cloud_run"
+  session_type: "cloud_sql"
+  cicd_runner: "google_cloud_build"
+  include_data_ingestion: false
+  
+  datastore: "none"
+  agent_guidance_filename: "GEMINI.md"

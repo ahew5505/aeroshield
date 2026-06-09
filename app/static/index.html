@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AeroShield — Environmental Risk Assessment</title>
+<link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F0F4F8;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#0C2D5E;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.topbar-logo{width:34px;height:34px;background:#E85D26;border-radius:7px;display:flex;align-items:center;justify-content:center}
+.topbar-logo i{font-size:20px;color:#fff}
+.topbar-title{font-size:16px;font-weight:600;color:#fff;letter-spacing:0.4px}
+.topbar-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px}
+.topbar-status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.65)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#4ade80}
+.status-dot.offline{background:#f87171}
+.main{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 54px);overflow:hidden}
+.panel{display:flex;flex-direction:column;background:#fff;border-right:1px solid #E2E8F0;height:100%;overflow:hidden}
+.panel-header{padding:10px 16px;border-bottom:1px solid #E2E8F0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.6px;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.messages{flex:1;overflow-y:scroll;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.msg{display:flex;flex-direction:column;gap:3px}
+.msg.user{align-items:flex-end}
+.msg.agent{align-items:flex-start}
+.msg-label{font-size:11px;color:#94A3B8;padding:0 4px}
+.msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.6;max-width:88%}
+.msg.user .msg-bubble{background:#0C2D5E;color:#fff;border-bottom-right-radius:3px}
+.msg.agent .msg-bubble{background:#F8FAFC;color:#1E293B;border:1px solid #E2E8F0;border-bottom-left-radius:3px}
+.risk-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:8px}
+.risk-critical{background:#FEE2E2;color:#991B1B}
+.risk-high{background:#FEF3C7;color:#92400E}
+.risk-moderate{background:#D1FAE5;color:#065F46}
+.risk-low{background:#DBEAFE;color:#1E40AF}
+.input-area{padding:12px 16px;border-top:1px solid #E2E8F0;flex-shrink:0}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1;padding:9px 14px;font-size:13px;border-radius:10px;border:1px solid #CBD5E1;outline:none;background:#F8FAFC;color:#1E293B}
+.input-row input:focus{border-color:#0C2D5E;background:#fff}
+.input-row button{background:#0C2D5E;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.input-row button:hover{background:#184B8C}
+.input-row button:disabled{background:#94A3B8;cursor:not-allowed}
+.quick-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.quick-btn{font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #CBD5E1;background:#F8FAFC;color:#64748B;cursor:pointer}
+.quick-btn:hover{border-color:#0C2D5E;color:#0C2D5E}
+.typing{display:flex;gap:4px;align-items:center}
+.dot{width:6px;height:6px;border-radius:50%;background:#94A3B8;animation:bounce 1.2s infinite}
+.dot:nth-child(2){animation-delay:0.2s}
+.dot:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.status-text{font-size:12px;color:#94A3B8;margin-left:8px;font-style:italic}
+.map-panel{display:flex;flex-direction:column;background:#fff;height:100%;overflow:hidden}
+.map-area{flex:1;position:relative;overflow:hidden;background:#EBF4FF;min-height:0}
+#map{width:100%;height:100%}
+.map-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
+.map-placeholder i{font-size:40px;color:#93C5FD}
+.map-placeholder p{font-size:13px;color:#60A5FA;font-weight:500}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #E2E8F0;flex-shrink:0}
+.stat{padding:10px 14px;border-right:1px solid #E2E8F0}
+.stat:last-child{border-right:none}
+.stat-label{font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px}
+.stat-value{font-size:15px;font-weight:600;color:#1E293B}
+.stat-value.critical{color:#991B1B}
+.stat-value.high{color:#92400E}
+.stat-value.moderate{color:#065F46}
+.stat-value.low{color:#1E40AF}
+.stat-value.none{color:#94A3B8}
+.geojson-btn{font-size:11px;padding:5px 10px;border-radius:8px;border:1px solid #CBD5E1;background:#F8FAFC;color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-top:8px}
+.geojson-btn:hover{border-color:#0C2D5E;color:#0C2D5E}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo"><i class="ti ti-shield-half"></i></div>
+  <div>
+    <div class="topbar-title">AEROSHIELD</div>
+    <div class="topbar-sub">Environmental Risk Assessment System</div>
+  </div>
+  <div class="topbar-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="panel">
+    <div class="panel-header">
+      <i class="ti ti-message-2"></i>
+      Incident assessment
+    </div>
+    <div class="messages" id="messages">
+      <div class="msg agent">
+        <span class="msg-label">AeroShield</span>
+        <div class="msg-bubble">Ready to assess. Report an incident with location, event type, and severity (1–10).</div>
+      </div>
+    </div>
+    <div class="input-area">
+      <div class="input-row">
+        <input type="text" id="inputBox" placeholder="e.g. Chemical spill near Texas Children's Hospital, Houston — severity 6"/>
+        <button id="sendBtn" onclick="sendMessage()"><i class="ti ti-send"></i> Send</button>
+      </div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="fillInput('Chemical spill near Texas Childrens Hospital, Houston — severity 6')"><i class="ti ti-flask"></i> Chemical · Houston</button>
+        <button class="quick-btn" onclick="fillInput('Wildfire near Dodger Stadium, Los Angeles — severity 8')"><i class="ti ti-flame"></i> Wildfire · LA</button>
+        <button class="quick-btn" onclick="fillInput('Tornado near Moore High School, Oklahoma — severity 8')"><i class="ti ti-tornado"></i> Tornado · OKC</button>
+        <button class="quick-btn" onclick="fillInput('Gas explosion near Times Square, New York — severity 7')"><i class="ti ti-building"></i> Explosion · NYC</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="map-panel">
+    <div class="panel-header">
+      <i class="ti ti-map"></i>
+      Plume visualization
+      <button class="geojson-btn" id="copyGeoBtn" style="display:none;margin-left:auto" onclick="copyStoredGeoJSON()">
+        <i class="ti ti-copy"></i> Copy GeoJSON
+      </button>
+    </div>
+    <div class="map-area">
+      <div id="mapPlaceholder" class="map-placeholder">
+        <i class="ti ti-map-pin"></i>
+        <p>Plume map will appear after assessment</p>
+      </div>
+      <div id="map"></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-label">Risk tier</div><div class="stat-value none" id="statRisk">—</div></div>
+      <div class="stat"><div class="stat-label">Score</div><div class="stat-value none" id="statScore">—</div></div>
+      <div class="stat"><div class="stat-label">Population</div><div class="stat-value none" id="statPop">—</div></div>
+      <div class="stat"><div class="stat-label">Evac radius</div><div class="stat-value none" id="statEvac">—</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const APP_NAME = 'app';
+const USER_ID = 'user_' + Math.random().toString(36).slice(2,8);
+const BASE = '';
+
+let sessionId = null;
+let map = null;
+let currentGeoJSON = null;
+let geoLayer = null;
+let isThinking = false;
+
+const TOOL_LABELS = {
+  geocode_location:        'Geocoding location...',
+  search_population_data:  'Querying population data...',
+  search_hazmat_facilities:'Scanning hazmat facilities...',
+  search_incident_history: 'Searching incident history...',
+  get_weather_conditions:  'Fetching live weather...',
+  calculate_plume_model:   'Modeling hazard plume...',
+  calculate_risk_score:    'Calculating risk score...',
+};
+
+function initMap() {
+  map = L.map('map', {zoomControl:true}).setView([37.8,-96], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap contributors', maxZoom:18
+  }).addTo(map);
+}
+
+async function createSession() {
+  try {
+    const resp = await fetch(`${BASE}/apps/${APP_NAME}/users/${USER_ID}/sessions`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})
+    });
+    const data = await resp.json();
+    sessionId = data.id;
+    document.getElementById('statusDot').classList.remove('offline');
+    document.getElementById('statusText').textContent = 'Live · Elasticsearch · Open-Meteo';
+  } catch(e) {
+    document.getElementById('statusDot').classList.add('offline');
+    document.getElementById('statusText').textContent = 'Disconnected';
+  }
+}
+
+function fillInput(text) {
+  document.getElementById('inputBox').value = text;
+  document.getElementById('inputBox').focus();
+}
+
+function addMessage(role, text) {
+  const messages = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  const label = document.createElement('span');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You' : 'AeroShield';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = role === 'agent' ? formatReport(text) : escapeHtml(text);
+  div.appendChild(label);
+  div.appendChild(bubble);
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addTypingBubble() {
+  const messages = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg agent';
+  div.id = 'typingIndicator';
+  const label = document.createElement('span');
+  label.className = 'msg-label';
+  label.textContent = 'AeroShield';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = '<div style="display:flex;align-items:center"><div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span class="status-text">Initializing...</span></div>';
+  div.appendChild(label);
+  div.appendChild(bubble);
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+  return bubble;
+}
+
+function updateTypingStatus(bubble, text) {
+  const el = bubble.querySelector('.status-text');
+  if (el) el.textContent = text;
+  document.getElementById('messages').scrollTop = 99999;
+}
+
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+function formatReport(text) {
+  let geo = null;
+  const geoMatch = text.match(/```json([\s\S]*?)```/);
+  if (geoMatch) {
+    try { geo = JSON.parse(geoMatch[1].trim()); } catch(e) {}
+  }
+  let clean = text.replace(/```json[\s\S]*?```/, '').trim();
+  let html = clean.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  const tierMatch = clean.match(/RISK TIER:\s*(CRITICAL|HIGH|MODERATE|LOW)/i);
+  if (tierMatch) {
+    const tier = tierMatch[1].toUpperCase();
+    const scoreMatch = clean.match(/Score:\s*(\d+)\/100/i);
+    const scoreStr = scoreMatch ? ' &middot; Score ' + scoreMatch[1] + '/100' : '';
+    html = '<div class="risk-badge risk-' + tier.toLowerCase() + '"><i class="ti ti-alert-triangle" style="font-size:11px"></i>' + tier + scoreStr + '</div>' + html;
+  }
+  if (geo) {
+    window._lastGeoJSON = geo;
+    html += '<br><button class="geojson-btn" onclick="copyStoredGeoJSON()"><i class="ti ti-copy"></i> Copy GeoJSON</button>';
+  }
+  return html;
+}
+
+function copyStoredGeoJSON() {
+  if (!window._lastGeoJSON) return;
+  navigator.clipboard.writeText(JSON.stringify(window._lastGeoJSON, null, 2));
+}
+
+function parseStats(text) {
+  const tierMatch = text.match(/RISK TIER:\s*(CRITICAL|HIGH|MODERATE|LOW)/i);
+  const scoreMatch = text.match(/Score:\s*(\d+)\/100/i);
+  const popMatch = text.match(/([\d,]+)\s*people/i);
+  const evacMatch = text.match(/Evacuation Radius:\s*(\d+)\s*miles?/i);
+  if (tierMatch) {
+    const tier = tierMatch[1].toUpperCase();
+    const el = document.getElementById('statRisk');
+    el.textContent = tier;
+    el.className = 'stat-value ' + tier.toLowerCase();
+  }
+  if (scoreMatch) document.getElementById('statScore').textContent = scoreMatch[1] + '/100';
+  if (popMatch) document.getElementById('statPop').textContent = parseInt(popMatch[1].replace(/,/g,'')).toLocaleString();
+  if (evacMatch) document.getElementById('statEvac').textContent = evacMatch[1] + ' mi';
+}
+
+function renderGeoJSON(text) {
+  const match = text.match(/```json([\s\S]*?)```/);
+  if (!match) return;
+  try {
+    const geo = JSON.parse(match[1].trim());
+    currentGeoJSON = geo;
+    if (geoLayer) map.removeLayer(geoLayer);
+    geoLayer = L.geoJSON(geo, {
+      style: function(f) {
+        return {color:f.properties.stroke||'#9400D3',fillColor:f.properties.fill||'#9400D3',fillOpacity:f.properties['fill-opacity']||0.35,weight:2};
+      },
+      pointToLayer: function(f, latlng) {
+        return L.circleMarker(latlng, {radius:10,fillColor:'#E24B4A',color:'#fff',weight:2,fillOpacity:1});
+      },
+      onEachFeature: function(f, layer) {
+        if (f.properties && f.properties.name) layer.bindPopup('<strong>' + f.properties.name + '</strong>');
+      }
+    }).addTo(map);
+    map.fitBounds(geoLayer.getBounds(), {padding:[30,30]});
+    document.getElementById('mapPlaceholder').style.display = 'none';
+    document.getElementById('copyGeoBtn').style.display = 'inline-flex';
+  } catch(e) { console.error('GeoJSON error:', e); }
+}
+
+async function sendMessage() {
+  if (isThinking) return;
+  const input = document.getElementById('inputBox');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!sessionId) {
+    await createSession();
+    if (!sessionId) { alert('Could not connect to AeroShield backend.'); return; }
+  }
+  input.value = '';
+  isThinking = true;
+  document.getElementById('sendBtn').disabled = true;
+  addMessage('user', text);
+  const bubble = addTypingBubble();
+
+  try {
+    const resp = await fetch(`${BASE}/run_sse`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        app_name: APP_NAME,
+        user_id: USER_ID,
+        session_id: sessionId,
+        new_message: {role:'user', parts:[{text}]},
+        streaming: true,
+      })
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalText = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const event = JSON.parse(line.slice(5).trim());
+          const parts = event?.content?.parts || [];
+          const role = event?.content?.role;
+          if (role === 'model') {
+            for (const part of parts) {
+              if (part.functionCall) {
+                const label = TOOL_LABELS[part.functionCall.name] || 'Processing...';
+                updateTypingStatus(bubble, label);
+              }
+              if (part.text && !part.thoughtSignature) finalText = part.text;
+            }
+          }
+        } catch(e) {}
+      }
+    }
+
+    removeTyping();
+    if (finalText) {
+      addMessage('agent', finalText);
+      parseStats(finalText);
+      renderGeoJSON(finalText);
+    } else {
+      addMessage('agent', 'Assessment complete.');
+    }
+  } catch(e) {
+    removeTyping();
+    addMessage('agent', 'Error connecting to backend. Make sure the agent server is running.');
+    console.error(e);
+  }
+
+  isThinking = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+document.getElementById('inputBox').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') sendMessage();
+});
+
+initMap();
+createSession();
+</script>
+</body>
+</html>
